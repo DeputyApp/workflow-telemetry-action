@@ -6,13 +6,38 @@ import {
 
 // GitHub renders mermaid with a fixed maxTextSize; long jobs produce more
 // samples than fit and the chart fails with "Maximum text size in diagram
-// exceeded". Downsample to a fixed point budget with bucket means so any
-// job length renders, keeping full-timeline coverage.
-const MAX_GRAPH_POINTS = 100
+// exceeded". Downsample with bucket means so any job length renders, keeping
+// full-timeline coverage. The budget is dynamic: as many points as fit the
+// text cap for the series count, bounded by what stays readable at 1200px.
+const TARGET_CHART_CHARS = 28000
+const MIN_GRAPH_POINTS = 100
+const MAX_GRAPH_POINTS = 240
+const X_AXIS_TIME_LABELS = 10
+
+function maxPointsForSeries(seriesRows: number): number {
+  // rough per-point cost: quoted x label (~14 chars) + ~8 chars per data row
+  const perPoint = 14 + seriesRows * 8
+  return Math.max(
+    MIN_GRAPH_POINTS,
+    Math.min(MAX_GRAPH_POINTS, Math.floor(TARGET_CHART_CHARS / perPoint))
+  )
+}
+
+// Show ~10 real time labels; every other slot gets an invisible label.
+// Blanks must still be unique strings — mermaid's band axis collapses
+// duplicate categories — so encode the index with zero-width characters.
+function sparseTimeLabels(points: ProcessedStats[]): string[] {
+  const step = Math.max(1, Math.ceil(points.length / X_AXIS_TIME_LABELS))
+  return points.map((point, i) =>
+    i % step === 0
+      ? formatTime(new Date(point.x))
+      : i.toString(2).replace(/0/g, '\u200b').replace(/1/g, '\u200c')
+  )
+}
 
 function downsamplePoints(
   points: ProcessedStats[],
-  maxPoints: number = MAX_GRAPH_POINTS
+  maxPoints: number
 ): ProcessedStats[] {
   if (points.length <= maxPoints) {
     return points
@@ -65,7 +90,7 @@ export async function getLineGraph(options: LineGraphOptions): Promise<string> {
 
   const line = {
     ...payload.lines[0],
-    points: downsamplePoints(payload.lines[0].points)
+    points: downsamplePoints(payload.lines[0].points, maxPointsForSeries(1))
   }
 
   const chartContent = `\`\`\`mermaid
@@ -76,15 +101,14 @@ config:
     height: ${payload.options.height}
     xAxis:
       labelFontSize: 10
-      showLabel: false
+      showLabel: true
       showTick: true
   themeVariables:
     xyChart:
       plotColorPalette: '${line.color}'
 ---
 xychart
-  x-axis "${payload.options.xAxis.label}" [${line.points
-    .map(point => formatTime(new Date(point.x)))
+  x-axis "${payload.options.xAxis.label}" [${sparseTimeLabels(line.points)
     .map(time => `"${time}"`)
     .join(', ')}]
   y-axis "${payload.options.yAxis.label}"
@@ -113,7 +137,11 @@ export async function getStackedAreaGraph(
     },
     areas: options.areas.map(area => ({
       ...area,
-      points: downsamplePoints(area.points)
+      points: downsamplePoints(
+        area.points,
+        // each area emits a line row and a bar row
+        maxPointsForSeries(options.areas.length * 2)
+      )
     }))
   }
 
@@ -141,7 +169,7 @@ config:
     height: ${payload.options.height}
     xAxis:
       labelFontSize: 10
-      showLabel: false
+      showLabel: true
       showTick: true
   themeVariables:
     xyChart:
@@ -154,8 +182,7 @@ config:
         .join(', ')}'
 ---
 xychart
-  x-axis "${payload.options.xAxis.label}" [${firstArea.points
-    .map(point => formatTime(new Date(point.x)))
+  x-axis "${payload.options.xAxis.label}" [${sparseTimeLabels(firstArea.points)
     .map(time => `"${time}"`)
     .join(', ')}]
   y-axis "${payload.options.yAxis.label}"
