@@ -1,4 +1,34 @@
-import { LineGraphOptions, StackedAreaGraphOptions } from './interfaces'
+import {
+  LineGraphOptions,
+  ProcessedStats,
+  StackedAreaGraphOptions
+} from './interfaces'
+
+// GitHub renders mermaid with a fixed maxTextSize; long jobs produce more
+// samples than fit and the chart fails with "Maximum text size in diagram
+// exceeded". Downsample to a fixed point budget with bucket means so any
+// job length renders, keeping full-timeline coverage.
+const MAX_GRAPH_POINTS = 100
+
+function downsamplePoints(
+  points: ProcessedStats[],
+  maxPoints: number = MAX_GRAPH_POINTS
+): ProcessedStats[] {
+  if (points.length <= maxPoints) {
+    return points
+  }
+  const bucketSize = points.length / maxPoints
+  const result: ProcessedStats[] = []
+  for (let i = 0; i < maxPoints; i++) {
+    const start = Math.floor(i * bucketSize)
+    const end = Math.max(start + 1, Math.floor((i + 1) * bucketSize))
+    const bucket = points.slice(start, end)
+    const x = bucket[Math.floor(bucket.length / 2)].x
+    const y = bucket.reduce((sum, p) => sum + p.y, 0) / bucket.length
+    result.push({ x, y: Math.round(y * 100) / 100 })
+  }
+  return result
+}
 
 function formatTime(date: Date): string {
   const hours = date.getHours().toString().padStart(2, '0')
@@ -33,7 +63,10 @@ export async function getLineGraph(options: LineGraphOptions): Promise<string> {
     lines: [options.line]
   }
 
-  const line = payload.lines[0]
+  const line = {
+    ...payload.lines[0],
+    points: downsamplePoints(payload.lines[0].points)
+  }
 
   const chartContent = `\`\`\`mermaid
 ---
@@ -78,7 +111,10 @@ export async function getStackedAreaGraph(
         unit: 'auto'
       }
     },
-    areas: options.areas
+    areas: options.areas.map(area => ({
+      ...area,
+      points: downsamplePoints(area.points)
+    }))
   }
 
   const firstArea = payload.areas[0] // Assuming all areas have the same x values
