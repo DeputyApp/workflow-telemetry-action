@@ -40648,7 +40648,7 @@ function reportAll(currentJob, content) {
         logger.debug(`Workflow - Job: ${workflow} - ${job}`);
         const jobUrl = `https://github.com/${repo.owner}/${repo.repo}/runs/${currentJob.id}?check_suite_focus=true`;
         logger.debug(`Job url: ${jobUrl}`);
-        const title = `## Workflow Telemetry - ${workflow} / ${currentJob.name}`;
+        const title = `📊 <b>Workflow Telemetry</b> - ${workflow} / ${currentJob.name} <i>- expand for CPU/memory/disk/network charts</i>`;
         logger.debug(`Title: ${title}`);
         const commit = (pull_request && pull_request.head && pull_request.head.sha) || sha;
         logger.debug(`Commit: ${commit}`);
@@ -40656,7 +40656,18 @@ function reportAll(currentJob, content) {
         logger.debug(`Commit url: ${commitUrl}`);
         const info = `Workflow telemetry for commit [${commit}](${commitUrl})\n` +
             `You can access workflow job details [here](${jobUrl})`;
-        const postContent = [title, info, content].join('\n');
+        // Collapsed by default: runs with many jobs otherwise make the summary
+        // page very heavy (blank lines are required for markdown/mermaid to
+        // render inside an HTML details block)
+        const postContent = [
+            '<details>',
+            `<summary>${title}</summary>`,
+            '',
+            info,
+            content,
+            '',
+            '</details>'
+        ].join('\n');
         const jobSummary = core.getInput('job_summary');
         if ('true' === jobSummary) {
             core.summary.addRaw(postContent);

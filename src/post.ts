@@ -71,7 +71,7 @@ async function reportAll(
   const jobUrl = `https://github.com/${repo.owner}/${repo.repo}/runs/${currentJob.id}?check_suite_focus=true`
   logger.debug(`Job url: ${jobUrl}`)
 
-  const title = `## Workflow Telemetry - ${workflow} / ${currentJob.name}`
+  const title = `📊 <b>Workflow Telemetry</b> - ${workflow} / ${currentJob.name} <i>- expand for CPU/memory/disk/network charts</i>`
   logger.debug(`Title: ${title}`)
 
   const commit: string =
@@ -85,7 +85,18 @@ async function reportAll(
     `Workflow telemetry for commit [${commit}](${commitUrl})\n` +
     `You can access workflow job details [here](${jobUrl})`
 
-  const postContent: string = [title, info, content].join('\n')
+  // Collapsed by default: runs with many jobs otherwise make the summary
+  // page very heavy (blank lines are required for markdown/mermaid to
+  // render inside an HTML details block)
+  const postContent: string = [
+    '<details>',
+    `<summary>${title}</summary>`,
+    '',
+    info,
+    content,
+    '',
+    '</details>'
+  ].join('\n')
 
   const jobSummary: string = core.getInput('job_summary')
   if ('true' === jobSummary) {
