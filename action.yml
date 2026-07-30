@@ -31,8 +31,8 @@ inputs:
     default: "false"
     required: false
   comment_on_pr:
-    description: "Set to `true` to publish the results as comment to the PR (applicable if workflow run is triggered from PR). Defaults to 'true'."
-    default: "true"
+    description: "Set to `true` to publish the results as a PR comment. Defaults to 'false' — the job summary always gets the charts."
+    default: "false"
     required: false
   job_summary:
     description: "Set to `true` to publish the results as part of the job summary page of the workflow run. Defaults to 'true'."
